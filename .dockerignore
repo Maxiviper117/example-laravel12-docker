@@ -1,1 +1,45 @@
-vendor
+# Dependencies
+/node_modules
+/vendor
+
+# Development files
+/.git
+/.github
+/.idea
+/.vscode
+/.fleet
+/.nova
+/.zed
+/.phpactor.json
+
+# Build artifacts
+/public/build
+/public/hot
+/public/storage
+
+# Storage
+/storage/*.key
+/storage/pail
+/storage/framework/cache/*
+/storage/framework/sessions/*
+/storage/framework/testing/*
+/storage/framework/views/*.php
+/storage/logs/*
+
+# Environment files
+/.env
+/.env.backup
+/.env.production
+/.env copy
+
+# Local dev artifacts
+/postgres_data
+/.phpunit.cache
+/.phpunit.result.cache
+/npm-debug.log
+/yarn-error.log
+/auth.json
+
+# Homestead
+Homestead.json
+Homestead.yaml
