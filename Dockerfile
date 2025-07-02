@@ -1,63 +1,83 @@
-FROM php:8.4.5-fpm
+# Dockerfile for Laravel 12 Production Application (with PHP-FPM, Composer, Redis, Imagick)
+# Builds a secure, optimized container for running Laravel in production
+
+FROM php:8.4.8-fpm
 
 # Update package list and install dependencies
 RUN apt-get update && apt-get install -y \
     #-- Needed only for compiling native PHP extensions
-    build-essential \                
+    build-essential \
     #-- Required for gd extension
-    libpng-dev \                     
+    libpng-dev \
     #-- Required for gd extension
-    libjpeg-dev \                    
+    libjpeg-dev \
     #-- Required for gd extension
-    libwebp-dev \                    
+    libwebp-dev \
     #-- Required for gd extension (rarely used)
-    libxpm-dev \                     
+    libxpm-dev \
     #-- Required for gd extension
-    libfreetype6-dev \              
+    libfreetype6-dev \
     #-- Required for PHP zip extension (can be removed if not using zip)
-    libzip-dev \                     
+    libzip-dev \
     zip \
     unzip \
     git \
     bash \
     #-- Rarely needed in PHP-FPM setups
-    fcgiwrap \                       
+    fcgiwrap \
     #-- Deprecated, usually unnecessary
-    libmcrypt-dev \                 
+    libmcrypt-dev \
     #-- Built-in since PHP 8.0 (for mbstring), can be removed
-    libonig-dev \                   
+    libonig-dev \
     #-- Only needed if using PostgreSQL (pdo_pgsql)
-    libpq-dev \                     
+    libpq-dev \
     #-- PostgreSQL client tools including psql
     postgresql-client \
     #-- Required for PHP intl extension
     libicu-dev \
+    #-- Required for imagick PHP extension
+    libmagickwand-dev \
+    #-- Required for PHP pdo_sqlite extension
+    libsqlite3-dev \
+    #-- Required for PHP dom and xml extensions
+    libxml2-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Install PHP extensions
 RUN docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp \
     && docker-php-ext-install gd \
     #-- Already installed in php:8.4.5-fpm
-    && docker-php-ext-install pdo \              
+    && docker-php-ext-install pdo \
     #-- Only needed if using PostgreSQL
-    && docker-php-ext-install pdo_pgsql \         
+    && docker-php-ext-install pdo_pgsql \
+    #-- SQLite PDO driver
+    && docker-php-ext-install pdo_sqlite \
+    #-- DOM extension for XML/HTML document handling
+    && docker-php-ext-install dom \
+    #-- XML extension for XML parsing
+    && docker-php-ext-install xml \
     #-- Already installed in php:8.4.5-fpm
-    && docker-php-ext-install mbstring \         
+    && docker-php-ext-install mbstring \
     #-- Optional — remove if not using PHP zip extension
-    && docker-php-ext-install zip \               
+    && docker-php-ext-install zip \
     #-- Optional — remove if not using image metadata
-    && docker-php-ext-install exif \              
+    && docker-php-ext-install exif \
     #-- Optional — useful for Laravel queues
-    && docker-php-ext-install pcntl \             
+    && docker-php-ext-install pcntl \
     #-- Optional — used in many Laravel features
-    && docker-php-ext-install bcmath \            
+    && docker-php-ext-install bcmath \
     #-- Already installed in php:8.4.5-fpm
     && docker-php-ext-install opcache \
     #-- Install intl extension required for Laravel formatting
-    && docker-php-ext-install intl               
+    && docker-php-ext-install intl \
+    #-- Install sockets extension (for queue workers, etc.)
+    && docker-php-ext-install sockets
 
 # Install Redis PHP extension
 RUN pecl install redis && docker-php-ext-enable redis
+
+# Install Imagick PHP extension
+RUN pecl install imagick && docker-php-ext-enable imagick
 
 # Install Composer
 COPY --from=composer/composer:latest-bin /composer /usr/bin/composer
@@ -69,7 +89,7 @@ WORKDIR /var/www/html
 COPY composer.json composer.lock ./
 
 # Install dependencies
-RUN composer install --no-scripts --no-autoloader
+RUN composer install --no-dev --optimize-autoloader
 
 # Copy the rest of the application
 COPY . .
@@ -80,12 +100,13 @@ RUN composer dump-autoload --optimize && \
 
 # Set ownership and permissions for the /var/www/html directory to www-data
 RUN chown -R www-data:www-data /var/www/html/
-
 USER www-data
 
 EXPOSE 9000
 
+# Start PHP-FPM server (FastCGI Process Manager) as the container's main process
 CMD ["php-fpm"]
+
 
 # Build
 # docker build -t laravel-app-test .
