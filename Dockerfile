@@ -3,83 +3,81 @@
 
 FROM php:8.4.8-fpm
 
-# Update package list and install dependencies
+# Install system dependencies
+# build-essential: Essential build tools for compiling software
+# libpng-dev, libjpeg-dev, libwebp-dev, libxpm-dev, libfreetype6-dev: Image support for GD
+# libzip-dev, zip, unzip: Zip archive support and utilities
+# git: Git version control
+# bash: Bash shell
+# fcgiwrap: FastCGI support for Nginx
+# libmcrypt-dev: mcrypt encryption support (legacy)
+# libonig-dev: Oniguruma regex library for mbstring
+# libpq-dev, postgresql-client: PostgreSQL client library and tools for pdo_pgsql
+# libicu-dev: Internationalization support for intl
+# libsqlite3-dev: SQLite3 support for pdo_sqlite
+# libmagickwand-dev: ImageMagick support for imagick
+# libxml2-dev: Required for PHP dom and xml extensions
 RUN apt-get update && apt-get install -y \
-    #-- Needed only for compiling native PHP extensions
     build-essential \
-    #-- Required for gd extension
     libpng-dev \
-    #-- Required for gd extension
     libjpeg-dev \
-    #-- Required for gd extension
     libwebp-dev \
-    #-- Required for gd extension (rarely used)
     libxpm-dev \
-    #-- Required for gd extension
     libfreetype6-dev \
-    #-- Required for PHP zip extension (can be removed if not using zip)
     libzip-dev \
     zip \
     unzip \
     git \
     bash \
-    #-- Rarely needed in PHP-FPM setups
     fcgiwrap \
-    #-- Deprecated, usually unnecessary
     libmcrypt-dev \
-    #-- Built-in since PHP 8.0 (for mbstring), can be removed
     libonig-dev \
-    #-- Only needed if using PostgreSQL (pdo_pgsql)
     libpq-dev \
-    #-- PostgreSQL client tools including psql
     postgresql-client \
-    #-- Required for PHP intl extension
     libicu-dev \
-    #-- Required for imagick PHP extension
     libmagickwand-dev \
-    #-- Required for PHP pdo_sqlite extension
     libsqlite3-dev \
-    #-- Required for PHP dom and xml extensions
     libxml2-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Install PHP extensions
+# gd: Image processing
+# pdo: PHP Data Objects core
+# pdo_pgsql: PDO driver for PostgreSQL
+# pdo_sqlite: PDO driver for SQLite
+# mbstring: Multibyte string support
+# zip: Zip archive support
+# exif: Image metadata (EXIF) support
+# pcntl: Process control (for queues, etc.)
+# bcmath: Arbitrary precision math
+# opcache: Opcode caching
+# intl: Internationalization functions
+# sockets: Sockets support (for queue workers, etc.)
+# dom: DOM extension for XML/HTML document handling
+# xml: XML extension for XML parsing
 RUN docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp \
     && docker-php-ext-install gd \
-    #-- Already installed in php:8.4.5-fpm
     && docker-php-ext-install pdo \
-    #-- Only needed if using PostgreSQL
     && docker-php-ext-install pdo_pgsql \
-    #-- SQLite PDO driver
     && docker-php-ext-install pdo_sqlite \
-    #-- DOM extension for XML/HTML document handling
     && docker-php-ext-install dom \
-    #-- XML extension for XML parsing
     && docker-php-ext-install xml \
-    #-- Already installed in php:8.4.5-fpm
     && docker-php-ext-install mbstring \
-    #-- Optional — remove if not using PHP zip extension
     && docker-php-ext-install zip \
-    #-- Optional — remove if not using image metadata
     && docker-php-ext-install exif \
-    #-- Optional — useful for Laravel queues
     && docker-php-ext-install pcntl \
-    #-- Optional — used in many Laravel features
     && docker-php-ext-install bcmath \
-    #-- Already installed in php:8.4.5-fpm
     && docker-php-ext-install opcache \
-    #-- Install intl extension required for Laravel formatting
     && docker-php-ext-install intl \
-    #-- Install sockets extension (for queue workers, etc.)
     && docker-php-ext-install sockets
 
-# Install Redis PHP extension
+# Install Redis PHP extension (caching, sessions, queues)
 RUN pecl install redis && docker-php-ext-enable redis
 
-# Install Imagick PHP extension
+# Install Imagick PHP extension (advanced image processing)
 RUN pecl install imagick && docker-php-ext-enable imagick
 
-# Install Composer
+# Install Composer (dependency manager)
 COPY --from=composer/composer:latest-bin /composer /usr/bin/composer
 
 # Set working directory
@@ -88,13 +86,13 @@ WORKDIR /var/www/html
 # Copy composer files first to leverage Docker cache
 COPY composer.json composer.lock ./
 
-# Install dependencies
+# Install Composer dependencies (production only, optimized autoloader)
 RUN composer install --no-dev --optimize-autoloader
 
-# Copy the rest of the application
+# Copy the rest of the application source code
 COPY . .
 
-# Generate autoloader and run other post-install scripts
+# Generate optimized autoloader and run Laravel post-install scripts
 RUN composer dump-autoload --optimize && \
     php artisan package:discover --ansi
 
