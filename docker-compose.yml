@@ -18,6 +18,13 @@ services:
             MAIL_HOST: mailpit
             MAIL_PORT: 1025
             SKIP_MIGRATE: false
+            FILESYSTEM_DISK: s3
+            AWS_ACCESS_KEY_ID: minioadmin
+            AWS_SECRET_ACCESS_KEY: minioadmin
+            AWS_DEFAULT_REGION: us-east-1
+            AWS_BUCKET: local-bucket
+            AWS_ENDPOINT: http://minio:9000
+            AWS_USE_PATH_STYLE_ENDPOINT: 'true'
         depends_on:
             - postgres
             - redis
@@ -108,10 +115,42 @@ services:
         ports:
             - "8001:80"
 
+    minio:
+        image: minio/minio:latest
+        container_name: minio
+        environment:
+            MINIO_ROOT_USER: minioadmin
+            MINIO_ROOT_PASSWORD: minioadmin
+        command: server /data --console-address ":9001"
+        ports:
+            - "9000:9000"
+            - "9001:9001"
+        volumes:
+            - minio_data:/data
+        restart: unless-stopped
+        networks:
+            - docker-network
+
+    # minio-console:
+    #     image: minio/console:latest
+    #     container_name: minio_console
+    #     environment:
+    #         CONSOLE_MINIO_SERVER: http://minio:9000
+    #         CONSOLE_MINIO_SERVER_ROOT_USER: minioadmin
+    #         CONSOLE_MINIO_SERVER_ROOT_PASSWORD: minioadmin
+    #     ports:
+    #         - "9090:9090"
+    #     depends_on:
+    #         - minio
+    #     restart: unless-stopped
+    #     networks:
+    #         - docker-network
+
 volumes:
     postgres_data:
     caddy_data:
     caddy_config:
+    minio_data:
 
 networks:
     docker-network:
