@@ -4,7 +4,7 @@ This checklist will help you solve the problem of running Laravel Horizon in a D
 
 ## Problem Statement
 - You want to use Laravel Horizon for queue management.
-- Your Docker base image does **not** include the Laravel app source code.
+- Your Docker base image I built does **not** include the Laravel app source code deliberately.
 - The app is mounted into the container at runtime (e.g. via `-v ./app:/var/www/html`).
 - Composer dependencies (including Horizon) are not installed in the image by default.
 

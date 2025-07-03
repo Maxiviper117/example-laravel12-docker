@@ -94,17 +94,19 @@ services:
         # volumes:
         #     - ./storage:/var/www/html/storage
         environment:
-            APP_ENV: ${APP_ENV:-production}
-            QUEUE_CONNECTION: ${QUEUE_CONNECTION:-redis}
-            REDIS_HOST: ${REDIS_HOST:-redis}
-            DB_HOST: ${DB_HOST:-postgres}
-            DB_PORT: ${DB_PORT:-5432}
+            APP_ENV: production
+            QUEUE_CONNECTION: redis
+            REDIS_HOST: redis
+            DB_HOST: postgres
+            DB_PORT: 5432
         depends_on:
             - redis
             - postgres
         restart: unless-stopped
         networks:
             - docker-network
+        ports:
+            - "8001:80"
 
 volumes:
     postgres_data:
