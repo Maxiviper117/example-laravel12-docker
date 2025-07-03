@@ -1,77 +1,115 @@
+services:
+    app:
+        image: laravel-12:8.4.8
+        container_name: laravel_app
+        entrypoint: ["/entrypoint-app.sh"]
+        env_file:
+            - .env
+        # volumes:
+        #     - ./storage:/var/www/html/storage
+        environment:
+            APP_ENV: production
+            QUEUE_CONNECTION: redis
+            REDIS_HOST: redis
+            DB_CONNECTION: pgsql
+            DB_HOST: postgres
+            MAIL_MAILER: smtp
+            MAIL_HOST: mailpit
+            MAIL_PORT: 1025
+            SKIP_MIGRATE: false
+        depends_on:
+            - postgres
+            - redis
+        restart: unless-stopped
+        networks:
+            - docker-network
 
-services:  
-  app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: laravel_app
-    ports:
-      - "9000:9000"
-    depends_on:
-      - postgres
-      - redis
-    restart: unless-stopped
-    entrypoint: ["/var/www/html/docker-entrypoint.sh"]
-    networks:
-      - docker-network
+    caddy:
+        image: caddy:latest
+        container_name: laravel_caddy
+        ports:
+            - "8000:80"
+            - "8443:443"
+        volumes:
+            - ./public:/var/www/html/public
+            - ./docker/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+            - caddy_data:/data
+            - caddy_config:/config
+        depends_on:
+            - app
+        restart: unless-stopped
+        networks:
+            - docker-network
 
-  caddy:
-    image: caddy:latest
-    container_name: laravel_caddy
-    ports:
-      - "8000:80"
-      - "8443:443"
-    volumes:
-      - .:/var/www/html
-      - .:/usr/share/caddy
-      - ./Caddyfile:/etc/caddy/Caddyfile
-    depends_on:
-      - app
-    networks:
-      - docker-network
+    postgres:
+        image: postgres:17-alpine
+        container_name: laravel_postgres
+        env_file:
+            - .env
+        environment:
+            POSTGRES_DB: ${DB_DATABASE}
+            POSTGRES_USER: ${DB_USERNAME}
+            POSTGRES_PASSWORD: ${DB_PASSWORD}
+        volumes:
+            - postgres_data:/var/lib/postgresql/data
+        restart: unless-stopped
+        networks:
+            - docker-network
 
-  worker:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    env_file: .env
-    container_name: laravel_worker
-    restart: unless-stopped
-    networks:
-      - docker-network
-    depends_on:
-      - postgres
-    command: php artisan queue:work
+    redis:
+        image: redis:alpine
+        container_name: laravel_redis
+        ports:
+            - "6379:6379"
+        restart: always
+        networks:
+            - docker-network
 
-  postgres:
-    image: postgres:17-alpine
-    container_name: laravel_postgres
-    env_file:
-      - .env
-    environment:
-      - POSTGRES_DB=${DB_DATABASE}       # Database name (from Laravel .env)
-      - POSTGRES_USER=${DB_USERNAME}     # Database user (from Laravel .env)
-      - POSTGRES_PASSWORD=${DB_PASSWORD} # Database password (from Laravel .env)
-    # ports:
-    #   - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    networks:
-      - docker-network
-      
-  redis:
-    image: redis:alpine
-    container_name: laravel_redis
-    ports:
-      - "6379:6379"
-    restart: always
-    networks:
-      - docker-network
-          
+    mailpit:
+        image: axllent/mailpit:latest
+        container_name: mailpit
+        ports:
+            - "8025:8025"
+            - "1025:1025"
+        restart: unless-stopped
+        networks:
+            - docker-network
+
+    adminer:
+        image: adminer:latest
+        container_name: laravel_adminer
+        ports:
+            - "8880:8080"
+        restart: unless-stopped
+        networks:
+            - docker-network
+
+    horizon:
+        image: laravel-12:8.4.8
+        container_name: laravel_horizon
+        entrypoint: ["/entrypoint-horizon.sh"]
+        env_file:
+            - .env
+        # volumes:
+        #     - ./storage:/var/www/html/storage
+        environment:
+            APP_ENV: ${APP_ENV:-production}
+            QUEUE_CONNECTION: ${QUEUE_CONNECTION:-redis}
+            REDIS_HOST: ${REDIS_HOST:-redis}
+            DB_HOST: ${DB_HOST:-postgres}
+            DB_PORT: ${DB_PORT:-5432}
+        depends_on:
+            - redis
+            - postgres
+        restart: unless-stopped
+        networks:
+            - docker-network
 
 volumes:
-  postgres_data:
+    postgres_data:
+    caddy_data:
+    caddy_config:
 
 networks:
-  docker-network:
-    driver: bridge
+    docker-network:
+        driver: bridge

@@ -1,8 +1,6 @@
 services:
   app:
-    build:
-      context: .
-      dockerfile: Dockerfile.base
+    image: laravel-12:8.4.8
     container_name: laravel_app
     entrypoint: ["/entrypoint-app.sh"]
     # Mount the **entire** app so that your code shows up under /var/www/html
@@ -10,7 +8,7 @@ services:
       - ./:/var/www/html
       - ./storage:/var/www/html/storage
     environment:
-      - HOST_OS=windows
+      # - HOST_OS=windows
       - APP_ENV=production
       - QUEUE_CONNECTION=redis
       - REDIS_HOST=redis
@@ -61,7 +59,7 @@ services:
   #   volumes:
   #     - ./:/var/www/html
   #   environment:
-  #     - HOST_OS=windows
+  #     # - HOST_OS=windows
   #     - APP_ENV=production
   #     - QUEUE_CONNECTION=redis
   #     - REDIS_HOST=redis
@@ -142,6 +140,4 @@ volumes:
 networks:
   docker-network:
     driver: bridge
-
-
 # $env:DOCKER_BUILDKIT=1; docker compose -f docker-compose.base.yml up --build -d

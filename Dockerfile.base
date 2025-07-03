@@ -131,10 +131,10 @@ ENTRYPOINT ["/entrypoint-app.sh"]
 # CMD ["php-fpm"]
 
 # Build with:
-# DOCKER_BUILDKIT=1 docker build -t laravel-php-base .
+# DOCKER_BUILDKIT=1 docker build -t laravel-12:8.4.8 .
 # for powershell
-# $env:DOCKER_BUILDKIT=1; docker build -t laravel-php-base .
+# $env:DOCKER_BUILDKIT=1; docker build -t laravel-12:8.4.8 .
 
-# docker build -f Dockerfile.base -t laravel-php-base .
+# docker build -f Dockerfile.base -t laravel-12:8.4.8 .
 
 # NOTE: Ensure /etc/supervisord.conf and /etc/supervisor/conf.d/horizon.conf are world-readable, and log directories are writable by www-data for Supervisor to work under USER www-data.

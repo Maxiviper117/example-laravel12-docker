@@ -44,6 +44,7 @@ RUN apt-get update && apt-get install -y \
     libsodium-dev \
     libxml2-dev \
     supervisor \
+    curl \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
@@ -83,27 +84,34 @@ RUN chmod 644 /etc/supervisord.conf /etc/supervisor/conf.d/horizon.conf \
     && chmod +x /entrypoint-app.sh /entrypoint-horizon.sh /entrypoint-queue.sh \
     && chown -R www-data:www-data /var/www/html/
 
+# Install Node.js and npm (for building frontend assets)
+RUN curl -fsSL https://deb.nodesource.com/setup_24.x | bash - \
+    && apt-get install -y nodejs \
+    && npm install -g pnpm
+
 # Set working directory
 WORKDIR /var/www/html
 
+# Copy application source code (including artisan and composer files)
+COPY . .
+
+# Install frontend dependencies and build assets
+RUN pnpm install --frozen-lockfile && pnpm run build
+
+# Ensure storage and bootstrap/cache directories exist and are writable by www-data
+RUN mkdir -p storage/logs storage/framework/cache storage/framework/sessions storage/framework/views bootstrap/cache \
+    && chown -R www-data:www-data storage bootstrap/cache \
+    && chmod -R ug+rwx storage bootstrap/cache
+
 USER www-data
 
-# Copy composer files and install dependencies (production only, optimized autoloader)
-COPY composer.json composer.lock ./
+# Install dependencies (production only, optimized autoloader)
 RUN composer install --no-dev --optimize-autoloader
-
-# Copy the rest of the application source code
-COPY . .
 
 # Generate optimized autoloader and run Laravel post-install scripts
 RUN composer dump-autoload --optimize && \
-    php artisan package:discover --ansi && \
-    php artisan config:cache && \
-    php artisan route:cache && \
-    php artisan view:cache
+    php artisan package:discover --ansi
 
-# Set ownership and permissions for the /var/www/html directory to www-data
-RUN chown -R www-data:www-data /var/www/html/
 
 EXPOSE 9000
 
@@ -113,8 +121,8 @@ ENTRYPOINT ["/entrypoint-app.sh"]
 # CMD ["php-fpm"]
 
 # Build with:
-# DOCKER_BUILDKIT=1 docker build -t laravel-app-prod .
+# DOCKER_BUILDKIT=1 docker build -t laravel-12:8.4.8 .
 # for powershell
-# $env:DOCKER_BUILDKIT=1; docker build -t laravel-app-prod .
+# $env:DOCKER_BUILDKIT=1; docker build -t laravel-12:8.4.8 .
 
 # NOTE: Ensure /etc/supervisord.conf and /etc/supervisor/conf.d/horizon.conf are world-readable, and log directories are writable by www-data for Supervisor to work under USER www-data.

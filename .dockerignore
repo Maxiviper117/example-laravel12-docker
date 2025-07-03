@@ -43,3 +43,6 @@
 # Homestead
 Homestead.json
 Homestead.yaml
+
+# Ignore SQLite database files
+/database/*.sqlite
