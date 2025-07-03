@@ -17,6 +17,7 @@ FROM php:8.4.8-fpm
 # libsqlite3-dev: SQLite3 support for pdo_sqlite
 # libmagickwand-dev: ImageMagick support for imagick
 # libxml2-dev: Required for PHP dom and xml extensions
+# supervisor: Process control system for UNIX (for queue/workers)
 RUN apt-get update && apt-get install -y \
     build-essential \
     libpng-dev \
@@ -38,6 +39,7 @@ RUN apt-get update && apt-get install -y \
     libmagickwand-dev \
     libsqlite3-dev \
     libxml2-dev \
+    supervisor \
     && rm -rf /var/lib/apt/lists/*
 
 # Install PHP extensions
@@ -77,6 +79,10 @@ RUN pecl install redis && docker-php-ext-enable redis
 # Install Imagick PHP extension (advanced image processing)
 RUN pecl install imagick && docker-php-ext-enable imagick
 
+# Copy Supervisor config
+COPY docker/supervisord.conf /etc/supervisord.conf
+COPY docker/horizon.conf /etc/supervisor/conf.d/horizon.conf
+
 # Install Composer (dependency manager)
 COPY --from=composer/composer:latest-bin /composer /usr/bin/composer
 
@@ -94,7 +100,10 @@ COPY . .
 
 # Generate optimized autoloader and run Laravel post-install scripts
 RUN composer dump-autoload --optimize && \
-    php artisan package:discover --ansi
+    php artisan package:discover --ansi && \
+    php artisan config:cache && \
+    php artisan route:cache && \
+    php artisan view:cache
 
 # Set ownership and permissions for the /var/www/html directory to www-data
 RUN chown -R www-data:www-data /var/www/html/

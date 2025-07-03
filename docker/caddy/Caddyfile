@@ -4,6 +4,8 @@
 
     php_fastcgi app:9000
 
+    encode gzip
+
     # Serve static files
     file_server
 
@@ -18,7 +20,8 @@
 
     # Optional: Log requests for debugging
     log {
-        output file /var/log/caddy.log
+        # output file /var/log/caddy.log
+        output stdout
         level debug
     }
 }
