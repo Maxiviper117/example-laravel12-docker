@@ -51,7 +51,7 @@
                 {{ session('status') }}
             </div>
         @endif
-        <h1 class="text-3xl font-bold text-center mb-4 text-red-400">Laravel 10</h1>
+        <h1 class="text-3xl font-bold text-center mb-4 text-red-400">Laravel 12</h1>
         <form method="POST" action="{{ route('job.dispatch') }}" class="mb-4">
             @csrf
             <button type="submit"
