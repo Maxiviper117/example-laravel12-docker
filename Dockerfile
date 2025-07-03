@@ -1,23 +1,23 @@
 # Dockerfile for Laravel 12 Production Application (with PHP-FPM, Composer, Redis, Imagick)
 # Builds a secure, optimized container for running Laravel in production
 
+# Order of instructions is optimized for Docker build cache efficiency:
+# 1. Install system and PHP dependencies (rarely change)
+# 2. Install Composer (rarely changes)
+# 3. Copy static config and entrypoint scripts (change less often than app code)
+# 4. Set permissions and ownership (depends on above files)
+# 5. Set working directory and user
+# 6. Copy in Laravel app and run Composer install/optimize (production only)
+# 7. Entrypoint and expose
+# This order ensures maximum cache reuse for frequent app code changes.
+
 FROM php:8.4.8-fpm
 
+RUN echo "Acquire::http::Pipeline-Depth 0;" > /etc/apt/apt.conf.d/99custom && \
+    echo "Acquire::http::No-Cache true;" >> /etc/apt/apt.conf.d/99custom && \
+    echo "Acquire::BrokenProxy    true;" >> /etc/apt/apt.conf.d/99custom
+
 # Install system dependencies
-# build-essential: Essential build tools for compiling software
-# libpng-dev, libjpeg-dev, libwebp-dev, libxpm-dev, libfreetype6-dev: Image support for GD
-# libzip-dev, zip, unzip: Zip archive support and utilities
-# git: Git version control
-# bash: Bash shell
-# fcgiwrap: FastCGI support for Nginx
-# libmcrypt-dev: mcrypt encryption support (legacy)
-# libonig-dev: Oniguruma regex library for mbstring
-# libpq-dev, postgresql-client: PostgreSQL client library and tools for pdo_pgsql
-# libicu-dev: Internationalization support for intl
-# libsqlite3-dev: SQLite3 support for pdo_sqlite
-# libmagickwand-dev: ImageMagick support for imagick
-# libxml2-dev: Required for PHP dom and xml extensions
-# supervisor: Process control system for UNIX (for queue/workers)
 RUN apt-get update && apt-get install -y \
     build-essential \
     libpng-dev \
@@ -31,39 +31,28 @@ RUN apt-get update && apt-get install -y \
     git \
     bash \
     fcgiwrap \
-    libmcrypt-dev \
     libonig-dev \
     libpq-dev \
     postgresql-client \
     libicu-dev \
-    libmagickwand-dev \
     libsqlite3-dev \
+    libmagickwand-dev \
+    imagemagick \
+    pkg-config \
+    libssl-dev \
+    zlib1g-dev \
+    libsodium-dev \
     libxml2-dev \
     supervisor \
-    && rm -rf /var/lib/apt/lists/*
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 # Install PHP extensions
-# gd: Image processing
-# pdo: PHP Data Objects core
-# pdo_pgsql: PDO driver for PostgreSQL
-# pdo_sqlite: PDO driver for SQLite
-# mbstring: Multibyte string support
-# zip: Zip archive support
-# exif: Image metadata (EXIF) support
-# pcntl: Process control (for queues, etc.)
-# bcmath: Arbitrary precision math
-# opcache: Opcode caching
-# intl: Internationalization functions
-# sockets: Sockets support (for queue workers, etc.)
-# dom: DOM extension for XML/HTML document handling
-# xml: XML extension for XML parsing
 RUN docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp \
     && docker-php-ext-install gd \
     && docker-php-ext-install pdo \
     && docker-php-ext-install pdo_pgsql \
     && docker-php-ext-install pdo_sqlite \
-    && docker-php-ext-install dom \
-    && docker-php-ext-install xml \
     && docker-php-ext-install mbstring \
     && docker-php-ext-install zip \
     && docker-php-ext-install exif \
@@ -71,28 +60,36 @@ RUN docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp \
     && docker-php-ext-install bcmath \
     && docker-php-ext-install opcache \
     && docker-php-ext-install intl \
-    && docker-php-ext-install sockets
+    && docker-php-ext-install sockets \
+    && docker-php-ext-install dom \
+    && docker-php-ext-install xml
 
-# Install Redis PHP extension (caching, sessions, queues)
-RUN pecl install redis && docker-php-ext-enable redis
+# Install Redis, Msgpack, Igbinary, Swoole, and Imagick PHP extensions
+RUN pecl install redis msgpack igbinary swoole imagick \
+    && docker-php-ext-enable redis msgpack igbinary swoole imagick
 
-# Install Imagick PHP extension (advanced image processing)
-RUN pecl install imagick && docker-php-ext-enable imagick
-
-# Copy Supervisor config
-COPY docker/supervisord.conf /etc/supervisord.conf
-COPY docker/horizon.conf /etc/supervisor/conf.d/horizon.conf
-
-# Install Composer (dependency manager)
+# Install Composer (dependency manager) as early as possible for cache efficiency
 COPY --from=composer/composer:latest-bin /composer /usr/bin/composer
+
+# Copy static configuration and entrypoint scripts before setting permissions to maximize cache reuse
+COPY docker/horizon.conf /etc/supervisor/conf.d/horizon.conf
+COPY docker/supervisord.conf /etc/supervisord.conf
+COPY docker/entrypoint-app.sh /entrypoint-app.sh
+COPY docker/entrypoint-horizon.sh /entrypoint-horizon.sh
+COPY docker/entrypoint-queue.sh /entrypoint-queue.sh
+
+# Set permissions and ownership in a single RUN to reduce layers
+RUN chmod 644 /etc/supervisord.conf /etc/supervisor/conf.d/horizon.conf \
+    && chmod +x /entrypoint-app.sh /entrypoint-horizon.sh /entrypoint-queue.sh \
+    && chown -R www-data:www-data /var/www/html/
 
 # Set working directory
 WORKDIR /var/www/html
 
-# Copy composer files first to leverage Docker cache
-COPY composer.json composer.lock ./
+USER www-data
 
-# Install Composer dependencies (production only, optimized autoloader)
+# Copy composer files and install dependencies (production only, optimized autoloader)
+COPY composer.json composer.lock ./
 RUN composer install --no-dev --optimize-autoloader
 
 # Copy the rest of the application source code
@@ -107,13 +104,17 @@ RUN composer dump-autoload --optimize && \
 
 # Set ownership and permissions for the /var/www/html directory to www-data
 RUN chown -R www-data:www-data /var/www/html/
-USER www-data
 
 EXPOSE 9000
 
 # Start PHP-FPM server (FastCGI Process Manager) as the container's main process
-CMD ["php-fpm"]
+ENTRYPOINT ["/entrypoint-app.sh"]
+# CMD can be omitted because the entrypoint exec’s php-fpm
+# CMD ["php-fpm"]
 
+# Build with:
+# DOCKER_BUILDKIT=1 docker build -t laravel-app-prod .
+# for powershell
+# $env:DOCKER_BUILDKIT=1; docker build -t laravel-app-prod .
 
-# Build
-# docker build -t laravel-app-test .
+# NOTE: Ensure /etc/supervisord.conf and /etc/supervisor/conf.d/horizon.conf are world-readable, and log directories are writable by www-data for Supervisor to work under USER www-data.
