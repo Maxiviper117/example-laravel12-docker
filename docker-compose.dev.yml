@@ -74,13 +74,13 @@ services:
   #     start_period: 10s
 
 
-  node:
-    image: node:24
-    volumes:
-      - .:/usr/src/app/
-    working_dir: /usr/src/app/
-    networks:
-      - development
+  # node:
+  #   image: node:24
+  #   volumes:
+  #     - .:/usr/src/app/
+  #   working_dir: /usr/src/app/
+  #   networks:
+  #     - development
 
   mailpit:
     image: axllent/mailpit

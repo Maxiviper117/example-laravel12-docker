@@ -62,8 +62,8 @@ RUN mkdir -p /var/www/html/.infrastructure/volume_data/sqlite/ && \
 USER www-data
 
 
-# Build our app
-# docker build -f Dockerfile.ssu --target development -t 8.4-fpm-nginx-custom:latest --build-arg USER_ID=$(id -u) --build-arg GROUP_ID=$(id -g) .
+# Build our app (for development) we can use the development target
+# docker build -f Dockerfile --target development -t 8.4-fpm-nginx-custom:latest --build-arg USER_ID=$(id -u) --build-arg GROUP_ID=$(id -g) .
 
 # For product you would not use the development target, as docker by default always builds with the last target. so in this case it would be deploy.
 # We are sepcificaly building wiht target development so that we can use the USER_ID and GROUP_ID build args and run a docker compose local development environment.
