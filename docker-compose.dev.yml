@@ -25,6 +25,9 @@ services:
     #     GROUP_ID: ${GID}
     volumes:
       - .:/var/www/html/
+    environment:
+      - AUTORUN_ENABLED=true
+      # - DISABLE_DEFAULT_CONFIG=true
     networks:
       - development
     depends_on:
@@ -58,6 +61,17 @@ services:
       - php
     networks:
       - development
+
+  # queue:
+  #   image: 8.4-fpm-nginx-custom:latest
+  #   volumes:
+  #     - .:/var/www/html/
+  #   command: ["php", "/var/www/html/artisan", "queue:work", "--tries=3"]
+  #   stop_signal: SIGTERM # Set this for graceful shutdown if you're using fpm-apache or fpm-nginx
+  #   healthcheck:
+  #     # This is our native healthcheck script for the queue
+  #     test: ["CMD", "healthcheck-queue"]
+  #     start_period: 10s
 
 
   node:
