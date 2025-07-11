@@ -1,143 +1,80 @@
 services:
-  app:
-    image: laravel-12:8.4.8
-    container_name: laravel_app
-    entrypoint: ["/entrypoint-app.sh"]
-    # Mount the **entire** app so that your code shows up under /var/www/html
-    volumes:
-      - ./:/var/www/html
-      - ./storage:/var/www/html/storage
-    environment:
-      # - HOST_OS=windows
-      - APP_ENV=production
-      - QUEUE_CONNECTION=redis
-      - REDIS_HOST=redis
-      - DB_HOST=postgres
-      - MAIL_MAILER=smtp
-      - MAIL_HOST=mailpit
-      - MAIL_PORT=1025
-      - SKIP_MIGRATE=false
-    # Expose to Caddy only; no need for external port mapping
-    # expose:
-    #   - "9000"
-    depends_on:
-      - postgres
-      - redis
-    restart: unless-stopped
-    networks:
-      - docker-network
-
-  queue:
-    build:
-      context: .
-      dockerfile: Dockerfile.base
-    container_name: laravel_queue
-    entrypoint: ["/entrypoint-queue.sh"]
-    volumes:
-      - ./:/var/www/html
-      - ./storage:/var/www/html/storage
-    environment:
-      - HOST_OS=windows
-      - APP_ENV=production
-      - QUEUE_CONNECTION=redis
-      - REDIS_HOST=redis
-      - DB_HOST=postgres
-    depends_on:
-      - redis
-      - postgres
-    restart: unless-stopped
-    networks:
-      - docker-network
-
-  # horizon:
-  #   build:
-  #     context: .
-  #     dockerfile: Dockerfile.base
-  #   container_name: laravel_horizon
-  #   entrypoint: ["/entrypoint-horizon.sh"]
-  #   # You can mount the code here too if you need live changes
-  #   volumes:
-  #     - ./:/var/www/html
-  #   environment:
-  #     # - HOST_OS=windows
-  #     - APP_ENV=production
-  #     - QUEUE_CONNECTION=redis
-  #     - REDIS_HOST=redis
-  #     - DB_HOST=postgres
-  #     - DB_PORT=5432
-  #   depends_on:
-  #     - redis
-  #   restart: unless-stopped
-  #   networks:
-  #     - docker-network
-
-  caddy:
-    image: caddy:latest
-    container_name: laravel_caddy
+  traefik:
+    image: traefik:v3.4
     ports:
-      - "8000:80"
+      - "8080:80"
       - "8443:443"
-    volumes:
-      - ./:/var/www/html
-      - ./docker/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
-    depends_on:
-      - app
-    restart: unless-stopped
+      - "8880:8880"
     networks:
-      - docker-network
+      development:
+    volumes:
+      # Mount the Docker socket as read-only so Traefik can listen to events
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./.infrastructure/conf/traefik/dev/traefik.yml:/traefik.yml:ro
+      - ./.infrastructure/conf/traefik/dev/traefik-certs.yml:/traefik-certs.yml
+      - ./.infrastructure/conf/traefik/dev/certificates/:/certificates
 
-  postgres:
-    image: postgres:17-alpine
-    container_name: laravel_postgres
-    env_file:
-      - .env
-    environment:
-      # You can remove these if they're already in .env
-      - POSTGRES_DB=${DB_DATABASE}
-      - POSTGRES_USER=${DB_USERNAME}
-      - POSTGRES_PASSWORD=${DB_PASSWORD}
+  php:
+    image: 8.4-fpm-nginx-custom:latest
+    # build:
+    #   context: .
+    #   dockerfile: Dockerfile.ssu
+    #   target: development
+    #   args:
+    #     USER_ID: ${UID}
+    #     GROUP_ID: ${GID}
     volumes:
-      - postgres_data:/var/lib/postgresql/data
-    restart: unless-stopped
+      - .:/var/www/html/
     networks:
-      - docker-network
+      - development
+    depends_on:
+      - traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.laravel.rule=Host(`localhost`)"
+      - "traefik.http.routers.laravel.entrypoints=web"
+      - "traefik.http.services.laravel.loadbalancer.server.port=8080"
+      - "traefik.http.services.laravel.loadbalancer.server.scheme=http"
+    stop_signal: SIGTERM
 
   redis:
-    image: redis:alpine
-    container_name: laravel_redis
-    ports:
-      - "6379:6379"
-    restart: always
+    image: redis:6
+    command: "redis-server --appendonly yes --requirepass redispassword"
     networks:
-      - docker-network
+      - development
+
+  horizon:
+    image: 8.4-fpm-nginx-custom:latest
+    command: ["php", "/var/www/html/artisan", "horizon"]
+    volumes:
+      - .:/var/www/html/
+    stop_signal: SIGTERM # Set this for graceful shutdown if you're using fpm-apache or fpm-nginx
+    healthcheck:
+      # This is our native healthcheck script for Horizon
+      test: ["CMD", "healthcheck-horizon"]
+      start_period: 10s
+    depends_on:
+      - redis
+      - php
+    networks:
+      - development
+
+
+  node:
+    image: node:24
+    volumes:
+      - .:/usr/src/app/
+    working_dir: /usr/src/app/
+    networks:
+      - development
 
   mailpit:
-    image: axllent/mailpit:latest
-    container_name: mailpit
+    image: axllent/mailpit
+    networks:
+      - development
     ports:
       - "8025:8025"
-      - "1025:1025"
-    restart: unless-stopped
-    networks:
-      - docker-network
 
-  adminer:
-    image: adminer:latest
-    container_name: laravel_adminer
-    ports:
-      - "8880:8080"
-    restart: unless-stopped
-    networks:
-      - docker-network
-
-volumes:
-  postgres_data:
-  caddy_data:
-  caddy_config:
 
 networks:
-  docker-network:
-    driver: bridge
-# $env:DOCKER_BUILDKIT=1; docker compose -f docker-compose.base.yml up --build -d
+  development:

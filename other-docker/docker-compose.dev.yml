@@ -1,0 +1,143 @@
+services:
+  app:
+    image: laravel-12:8.4.8
+    container_name: laravel_app
+    entrypoint: ["/entrypoint-app.sh"]
+    # Mount the **entire** app so that your code shows up under /var/www/html
+    volumes:
+      - ./:/var/www/html
+      - ./storage:/var/www/html/storage
+    environment:
+      # - HOST_OS=windows
+      - APP_ENV=production
+      - QUEUE_CONNECTION=redis
+      - REDIS_HOST=redis
+      - DB_HOST=postgres
+      - MAIL_MAILER=smtp
+      - MAIL_HOST=mailpit
+      - MAIL_PORT=1025
+      - SKIP_MIGRATE=false
+    # Expose to Caddy only; no need for external port mapping
+    # expose:
+    #   - "9000"
+    depends_on:
+      - postgres
+      - redis
+    restart: unless-stopped
+    networks:
+      - docker-network
+
+  queue:
+    build:
+      context: .
+      dockerfile: Dockerfile.base
+    container_name: laravel_queue
+    entrypoint: ["/entrypoint-queue.sh"]
+    volumes:
+      - ./:/var/www/html
+      - ./storage:/var/www/html/storage
+    environment:
+      - HOST_OS=windows
+      - APP_ENV=production
+      - QUEUE_CONNECTION=redis
+      - REDIS_HOST=redis
+      - DB_HOST=postgres
+    depends_on:
+      - redis
+      - postgres
+    restart: unless-stopped
+    networks:
+      - docker-network
+
+  # horizon:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile.base
+  #   container_name: laravel_horizon
+  #   entrypoint: ["/entrypoint-horizon.sh"]
+  #   # You can mount the code here too if you need live changes
+  #   volumes:
+  #     - ./:/var/www/html
+  #   environment:
+  #     # - HOST_OS=windows
+  #     - APP_ENV=production
+  #     - QUEUE_CONNECTION=redis
+  #     - REDIS_HOST=redis
+  #     - DB_HOST=postgres
+  #     - DB_PORT=5432
+  #   depends_on:
+  #     - redis
+  #   restart: unless-stopped
+  #   networks:
+  #     - docker-network
+
+  caddy:
+    image: caddy:latest
+    container_name: laravel_caddy
+    ports:
+      - "8000:80"
+      - "8443:443"
+    volumes:
+      - ./:/var/www/html
+      - ./docker/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+    restart: unless-stopped
+    networks:
+      - docker-network
+
+  postgres:
+    image: postgres:17-alpine
+    container_name: laravel_postgres
+    env_file:
+      - .env
+    environment:
+      # You can remove these if they're already in .env
+      - POSTGRES_DB=${DB_DATABASE}
+      - POSTGRES_USER=${DB_USERNAME}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    networks:
+      - docker-network
+
+  redis:
+    image: redis:alpine
+    container_name: laravel_redis
+    ports:
+      - "6379:6379"
+    restart: always
+    networks:
+      - docker-network
+
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: mailpit
+    ports:
+      - "8025:8025"
+      - "1025:1025"
+    restart: unless-stopped
+    networks:
+      - docker-network
+
+  adminer:
+    image: adminer:latest
+    container_name: laravel_adminer
+    ports:
+      - "8880:8080"
+    restart: unless-stopped
+    networks:
+      - docker-network
+
+volumes:
+  postgres_data:
+  caddy_data:
+  caddy_config:
+
+networks:
+  docker-network:
+    driver: bridge
+# $env:DOCKER_BUILDKIT=1; docker compose -f docker-compose.base.yml up --build -d
