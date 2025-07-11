@@ -1,0 +1,80 @@
+services:
+  traefik:
+    image: traefik:v3.4
+    ports:
+      - "8080:80"
+      - "8443:443"
+      - "8880:8880"
+    networks:
+      development:
+    volumes:
+      # Mount the Docker socket as read-only so Traefik can listen to events
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./.infrastructure/conf/traefik/dev/traefik.yml:/traefik.yml:ro
+      - ./.infrastructure/conf/traefik/dev/traefik-certs.yml:/traefik-certs.yml
+      - ./.infrastructure/conf/traefik/dev/certificates/:/certificates
+
+  php:
+    image: 8.4-fpm-nginx-custom:latest
+    # build:
+    #   context: .
+    #   dockerfile: Dockerfile.ssu
+    #   target: development
+    #   args:
+    #     USER_ID: ${UID}
+    #     GROUP_ID: ${GID}
+    volumes:
+      - .:/var/www/html/
+    networks:
+      - development
+    depends_on:
+      - traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.laravel.rule=Host(`localhost`)"
+      - "traefik.http.routers.laravel.entrypoints=web"
+      - "traefik.http.services.laravel.loadbalancer.server.port=8080"
+      - "traefik.http.services.laravel.loadbalancer.server.scheme=http"
+    stop_signal: SIGTERM
+
+  redis:
+    image: redis:6
+    command: "redis-server --appendonly yes --requirepass redispassword"
+    networks:
+      - development
+
+  horizon:
+    image: 8.4-fpm-nginx-custom:latest
+    command: ["php", "/var/www/html/artisan", "horizon"]
+    volumes:
+      - .:/var/www/html/
+    stop_signal: SIGTERM # Set this for graceful shutdown if you're using fpm-apache or fpm-nginx
+    healthcheck:
+      # This is our native healthcheck script for Horizon
+      test: ["CMD", "healthcheck-horizon"]
+      start_period: 10s
+    depends_on:
+      - redis
+      - php
+    networks:
+      - development
+
+
+  node:
+    image: node:24
+    volumes:
+      - .:/usr/src/app/
+    working_dir: /usr/src/app/
+    networks:
+      - development
+
+  mailpit:
+    image: axllent/mailpit
+    networks:
+      - development
+    ports:
+      - "8025:8025"
+
+
+networks:
+  development:
